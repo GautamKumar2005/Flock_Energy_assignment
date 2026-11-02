@@ -63,7 +63,7 @@ pip install -e .
 
 ### 2. Start the Service
 ```bash
-uvicorn urja_api.main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn urja_api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 The server will start at `http://localhost:8000`.
 
