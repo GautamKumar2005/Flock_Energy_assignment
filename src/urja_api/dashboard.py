@@ -345,6 +345,12 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       border: 1px solid rgba(244, 63, 94, 0.3);
     }
 
+    .badge-faulty {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--accent-amber);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
     .badge-phase-1 {
       background: rgba(56, 189, 248, 0.15);
       color: var(--accent-blue);
@@ -497,9 +503,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <div class="kpi-sub">Indexed from Urja Ops portal</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Commissioned / Active</div>
+        <div class="kpi-label">Installed (Active)</div>
         <div class="kpi-value" id="kpiActiveMeters" style="color: var(--accent-green);">--</div>
-        <div class="kpi-sub">Serving live consumers</div>
+        <div class="kpi-sub" id="kpiStatusSub">Faulty: -- | Decom: --</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Distribution Transformers</div>
@@ -558,9 +564,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
         <select id="filterStatus" class="select-filter" onchange="applyFilters()">
           <option value="">All Statuses</option>
-          <option value="Commissioned">Commissioned</option>
+          <option value="Installed">Installed (Active)</option>
+          <option value="Faulty">Faulty</option>
           <option value="Decommissioned">Decommissioned</option>
-          <option value="Pending">Pending</option>
         </select>
       </div>
 
@@ -612,13 +618,12 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     let chartInstance = null;
     let debounceTimer = null;
 
-    // Initialize Map
+    // Initialize Map with 100% Free OpenStreetMap Tiles (No API Key Required)
     function initMap() {
       map = L.map('map', { zoomControl: true }).setView([26.9124, 75.7873], 12);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 19
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" style="color:#64748b">OpenStreetMap</a> contributors'
       }).addTo(map);
       markersLayer = L.layerGroup().addTo(map);
     }
@@ -629,6 +634,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         const data = await res.json();
         document.getElementById('kpiTotalMeters').innerText = data.total_meters;
         document.getElementById('kpiActiveMeters').innerText = data.active_meters;
+        document.getElementById('kpiStatusSub').innerText = `Faulty: ${data.faulty_meters} | Decom: ${data.decommissioned_meters}`;
         document.getElementById('kpiTotalDts').innerText = data.total_dts;
         document.getElementById('kpiPhases').innerText = `${data.single_phase_meters} / ${data.three_phase_meters}`;
 
@@ -708,12 +714,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       const bounds = [];
 
       for (const m of meters) {
-        if (!m.geo || !m.geo.lat) continue;
-        const lat = m.geo.lat;
-        const lng = m.geo.lng;
+        const lat = m.latitude || (m.geo && (m.geo.lat || m.geo.latitude));
+        const lng = m.longitude || (m.geo && (m.geo.lng || m.geo.longitude));
+        if (!lat || !lng) continue;
         bounds.push([lat, lng]);
 
-        const color = m.installStatus === 'Decommissioned' ? '#f43f5e' : (m.phaseType === 'three' ? '#f59e0b' : '#38bdf8');
+        const status = m.install_status || m.installStatus || '';
+        const phase = m.phase_type || m.phaseType || '';
+        const color = status === 'Decommissioned' ? '#f43f5e' : (status === 'Faulty' ? '#f59e0b' : '#10b981');
         const marker = L.circleMarker([lat, lng], {
           radius: 6,
           fillColor: color,
@@ -723,13 +731,16 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           fillOpacity: 0.8
         });
 
+        const meterId = m.meter_id || m.meterId;
+        const serialNo = m.serial_no || m.serialNo;
+        const dtCode = m.dt_code || m.dtCode;
         marker.bindPopup(`
           <div style="font-family: 'Inter', sans-serif; color: #111;">
-            <strong>${m.meterId}</strong> (${m.serialNo})<br>
-            Make: <b>${m.make}</b> | Phase: <b>${m.phaseType}</b><br>
-            Status: <b>${m.installStatus}</b><br>
-            DT: <b>${m.dtCode}</b><br><br>
-            <button onclick="openMeterDetail('${m.meterId}')" style="background:#2563eb;color:#fff;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;">View Consumption</button>
+            <strong>${meterId}</strong> (${serialNo})<br>
+            Make: <b>${m.make}</b> | Phase: <b>${phase}</b><br>
+            Status: <b>${status}</b><br>
+            DT: <b>${dtCode}</b><br><br>
+            <button onclick="openMeterDetail('${meterId}')" style="background:#2563eb;color:#fff;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;">View Consumption</button>
           </div>
         `);
         markersLayer.addLayer(marker);
@@ -758,7 +769,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           <td style="font-family: 'JetBrains Mono', monospace;">${m.serial_no}</td>
           <td>${m.make}</td>
           <td><span class="badge ${m.phase_type === 'three' ? 'badge-phase-3' : 'badge-phase-1'}">${m.phase_type}</span></td>
-          <td><span class="badge ${m.install_status === 'Decommissioned' ? 'badge-decom' : 'badge-active'}">${m.install_status}</span></td>
+          <td><span class="badge ${m.install_status === 'Decommissioned' ? 'badge-decom' : (m.install_status === 'Faulty' ? 'badge-faulty' : 'badge-active')}">${m.install_status}</span></td>
           <td>${m.dt_code}</td>
           <td><button onclick="event.stopPropagation(); openMeterDetail('${m.meter_id}')" style="background:var(--bg-surface-elevated); border:1px solid var(--border-subtle); color:var(--text-main); padding:4px 8px; border-radius:4px; cursor:pointer;">Inspect</button></td>
         </tr>

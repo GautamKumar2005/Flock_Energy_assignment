@@ -195,11 +195,21 @@ class LocalIndexStore:
         end = start + page_size
         page_items = filtered[start:end]
 
-        return PagedMeters(
-            total=total,
-            page=page,
-            page_size=page_size,
-            data=[
+        def _extract_geo(item: dict) -> tuple[Optional[float], Optional[float]]:
+            geo = item.get("geo") or {}
+            lat = geo.get("lat") or geo.get("latitude")
+            lng = geo.get("lng") or geo.get("longitude")
+            try:
+                m_lat = float(lat) if lat is not None else None
+                m_lng = float(lng) if lng is not None else None
+                return m_lat, m_lng
+            except (ValueError, TypeError):
+                return None, None
+
+        data_items = []
+        for m in page_items:
+            lat, lng = _extract_geo(m)
+            data_items.append(
                 MeterSummary(
                     meter_id=m["meterId"],
                     serial_no=m.get("serialNo", ""),
@@ -207,9 +217,16 @@ class LocalIndexStore:
                     phase_type=m.get("phaseType", ""),
                     install_status=m.get("installStatus", ""),
                     dt_code=m.get("dtCode", ""),
+                    latitude=lat,
+                    longitude=lng,
                 )
-                for m in page_items
-            ],
+            )
+
+        return PagedMeters(
+            total=total,
+            page=page,
+            page_size=page_size,
+            data=data_items,
         )
 
     def get_stats(self) -> NetworkStats:
@@ -235,7 +252,8 @@ class LocalIndexStore:
         return NetworkStats(
             total_meters=len(self.meters),
             total_dts=len(dts),
-            active_meters=statuses.get("Active", 0) + statuses.get("Commissioned", 0),
+            active_meters=statuses.get("Installed", 0) + statuses.get("Active", 0),
+            faulty_meters=statuses.get("Faulty", 0),
             decommissioned_meters=statuses.get("Decommissioned", 0),
             pending_meters=statuses.get("Pending", 0),
             single_phase_meters=phases.get("single", 0),

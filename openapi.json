@@ -947,12 +947,36 @@
           "install_status": {
             "type": "string",
             "title": "Install Status",
-            "description": "Installation status (e.g. Active, Decommissioned, Pending)"
+            "description": "Installation status (e.g. Installed, Faulty, Decommissioned)"
           },
           "dt_code": {
             "type": "string",
             "title": "Dt Code",
             "description": "Distribution transformer code this meter belongs to"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude",
+            "description": "Latitude coordinate"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude",
+            "description": "Longitude coordinate"
           }
         },
         "type": "object",
@@ -1070,13 +1094,19 @@
             "type": "integer",
             "title": "Active Meters"
           },
+          "faulty_meters": {
+            "type": "integer",
+            "title": "Faulty Meters",
+            "default": 0
+          },
           "decommissioned_meters": {
             "type": "integer",
             "title": "Decommissioned Meters"
           },
           "pending_meters": {
             "type": "integer",
-            "title": "Pending Meters"
+            "title": "Pending Meters",
+            "default": 0
           },
           "single_phase_meters": {
             "type": "integer",
@@ -1121,7 +1151,6 @@
           "total_dts",
           "active_meters",
           "decommissioned_meters",
-          "pending_meters",
           "single_phase_meters",
           "three_phase_meters",
           "makes_breakdown",

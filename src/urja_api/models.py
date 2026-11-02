@@ -21,9 +21,11 @@ class MeterSummary(BaseModel):
     make: str = Field(..., description="Manufacturer (e.g. HPL, L&T, Genus)")
     phase_type: str = Field(..., description="'single' or 'three'")
     install_status: str = Field(
-        ..., description="Installation status (e.g. Active, Decommissioned, Pending)"
+        ..., description="Installation status (e.g. Installed, Faulty, Decommissioned)"
     )
     dt_code: str = Field(..., description="Distribution transformer code this meter belongs to")
+    latitude: Optional[float] = Field(None, description="Latitude coordinate")
+    longitude: Optional[float] = Field(None, description="Longitude coordinate")
 
 
 class HierarchyLevel(BaseModel):
@@ -177,8 +179,9 @@ class NetworkStats(BaseModel):
     total_meters: int
     total_dts: int
     active_meters: int
+    faulty_meters: int = 0
     decommissioned_meters: int
-    pending_meters: int
+    pending_meters: int = 0
     single_phase_meters: int
     three_phase_meters: int
     makes_breakdown: dict[str, int]
