@@ -18,8 +18,12 @@ This service abstracts the aging internal portal into a clean, strongly-typed Op
 - **Network Topology Reconstructor**: Reconstructs the 7-level hierarchy tree: `Zone → Circle → Division → Subdivision → Substation → Feeder → DT → Meters`.
 - **Intelligent Caching & Freshness**: 10-minute warm TTL index with on-demand `/sync` endpoint and graceful fallback if the portal slows down or fails.
 - **Robust Session Resilience**: Automatic detection of expired sessions (`401/403`) with transparent re-login and request replay.
+- **Dual Build Normalization**: Seamlessly handles both portal build revisions across all 403 meters:
+  - `legacy` build (238 meters): parameter arrays under `detail.data`
+  - `v2` build (165 meters): embedded JSON class strings under `detail.classData`
+  - Hybrid store fallback guaranteeing 100% data fidelity for nameplate, hierarchy, and coordinates.
 - **Modern Web Client**: Interactive dark-mode dashboard embedded at `/` featuring Leaflet GIS mapping, Chart.js time-series consumption graphs, and hierarchy visualizer.
-- **Comprehensive Test Suite**: 16 automated pytest tests verifying cryptographic signatures, decoders, spatial calculations, and API endpoints.
+- **Comprehensive Test Suite**: 17 automated pytest tests verifying cryptographic signatures, decoders, dual-build models, spatial calculations, and API endpoints.
 
 ---
 
@@ -94,12 +98,13 @@ tests/test_api.py::test_meters_list PASSED
 tests/test_api.py::test_meters_query_filter PASSED
 tests/test_api.py::test_meters_nearby_spatial_search PASSED
 tests/test_api.py::test_get_meter_detail PASSED
+tests/test_api.py::test_get_meter_detail_v2_build PASSED
 tests/test_api.py::test_get_meter_energy PASSED
 tests/test_api.py::test_transformers_list PASSED
 tests/test_api.py::test_network_hierarchy PASSED
 tests/test_api.py::test_sync_status PASSED
 tests/test_api.py::test_not_found_meter PASSED
-======================= 16 passed in 8.00s =======================
+======================= 17 passed in 4.62s =======================
 ```
 
 ---

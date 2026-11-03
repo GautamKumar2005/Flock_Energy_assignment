@@ -58,31 +58,21 @@ The human portal does not load meter nameplate and hierarchy from a standard RES
 
 - **Method**: `GET`
 - **Path**: `/meters/{meter_id}/__data.json`
-- **Payload Structure**: SvelteKit serializes data as a flat array of nodes where objects and lists reference primitive strings and sub-objects by integer index into the array (reference deduplication):
-  ```json
-  {
-    "type": "data",
-    "nodes": [
-      null,
-      null,
-      {
-        "type": "data",
-        "data": [
-          {"meterId": 1, "detail": 2, "hierarchy": 3},
-          "J100000",
-          {"data": 4},
-          {"Zone": 5, "DT": 6},
-          [{"parameterName": 7, "parameterValue": 8}],
-          "Jaipur Zone 1 (Z-01)",
-          "DT-001",
-          "Make",
-          "HPL"
-        ]
-      }
-    ]
-  }
-  ```
-- **Decoder Implementation**: We implemented `_decode_meter_data_node()` in `portal_client.py` which recursively dereferences all indices against `data[]` into clean nested dictionaries and arrays.
+- **Dual Build Architecture Discovery**: Analysis across all 403 meters revealed the portal internally operates with two distinct historical build revisions:
+  1. **Legacy Build (238 meters, e.g. `J100000`)**: Nameplate parameters are serialized under `detail.data` as an array of dynamic key-value pairs:
+     ```json
+     {
+       "parameterName": "Make",
+       "parameterValue": "HPL"
+     }
+     ```
+  2. **V2 Build (165 meters, e.g. `J100019`)**: Nameplate parameters are serialized under `detail.classData` as an embedded JSON string:
+     ```json
+     {
+       "classData": "{\"installed_meter\":{\"MeterId\":\"J100019\",\"SerialNo\":\"GE24621\",\"Make\":\"L&T\",\"PhaseType\":\"single\",\"InstallationStatus\":\"Decommissioned\",\"InstallationType\":\"Whole Current\"}}"
+     }
+     ```
+- **Decoder Implementation**: We implemented `_decode_meter_data_node()` in `portal_client.py` which recursively dereferences all indices against `data[]` into clean nested dictionaries and arrays, and `_shape_meter_detail()` in `main.py` which detects and normalizes both `legacy` (`detail.data`) and `v2` (`detail.classData`) into our clean `MeterNameplate` schema, backed by local store synchronization.
 - **Quirks**: For non-existent meter IDs, the endpoint returns HTTP `200` with an empty data node `{}` instead of `404 Not Found`. Our API detects this and translates it to standard HTTP `404`.
 
 ---

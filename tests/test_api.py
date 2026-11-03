@@ -180,8 +180,26 @@ def test_get_meter_detail(client: TestClient):
     assert response.status_code == 200
     data = response.json()
     assert data["meter_id"] == "J100000"
-    assert "nameplate" in data
+    assert data["nameplate"]["serial_no"] == "SE33962"
+    assert data["nameplate"]["make"] == "HPL"
+    assert data["nameplate"]["phase_type"] == "single"
+    assert data["nameplate"]["install_status"] == "Decommissioned"
     assert "hierarchy" in data
+
+
+def test_get_meter_detail_v2_build(client: TestClient):
+    # Verifies 'v2' build meter with classData payload (e.g. Civil Lines DT 20 / Feeder 20)
+    response = client.get("/meters/J100019")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["meter_id"] == "J100019"
+    assert data["nameplate"]["serial_no"] == "GE24621"
+    assert data["nameplate"]["make"] == "L&T"
+    assert data["nameplate"]["phase_type"] == "single"
+    assert data["nameplate"]["install_status"] == "Decommissioned"
+    assert "hierarchy" in data
+    assert data["hierarchy"]["feeder"]["name"] == "Feeder 20"
+    assert data["hierarchy"]["dt"]["name"] == "Civil Lines DT 20"
 
 
 def test_get_meter_energy(client: TestClient):

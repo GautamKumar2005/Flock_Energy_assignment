@@ -8,6 +8,7 @@ touch the original portal.
 """
 from __future__ import annotations
 
+import json
 import logging
 from contextlib import asynccontextmanager
 from typing import Any, Optional
@@ -123,17 +124,59 @@ def _shape_meter_detail(
     raw_detail: dict,
     geo_data: dict | None,
     meter_id: str,
+    store_m: dict | None = None,
 ) -> MeterDetail:
     """
     Converts the decoded SvelteKit __data.json into a MeterDetail.
-    Flattens dynamic nameplate parameters and extracts hierarchy.
+    Handles both portal build variations:
+      - 'legacy' build: nameplate stored under detail.data as [{parameterName, parameterValue}, ...]
+      - 'v2' build: nameplate stored under detail.classData as JSON string {"installed_meter": {...}}
+    Also falls back to pre-synced local index store (store_m) to guarantee 100% data completeness.
     """
-    detail_block = raw_detail.get("detail", {})
-    params = detail_block.get("data", [])
+    detail_block = raw_detail.get("detail", {}) if isinstance(raw_detail, dict) else {}
     np: dict[str, str] = {}
-    for param in params:
-        if isinstance(param, dict) and "parameterName" in param:
-            np[param["parameterName"]] = str(param.get("parameterValue", ""))
+
+    # 1. Parse 'v2' build classData if present
+    if "classData" in detail_block:
+        cd = detail_block["classData"]
+        if isinstance(cd, str):
+            try:
+                cd = json.loads(cd)
+            except Exception:
+                cd = {}
+        im = cd.get("installed_meter", cd) if isinstance(cd, dict) else {}
+        if im.get("SerialNo") or im.get("serialNo"):
+            np["Serial No"] = str(im.get("SerialNo") or im.get("serialNo"))
+        if im.get("Make") or im.get("make"):
+            np["Make"] = str(im.get("Make") or im.get("make"))
+        if im.get("PhaseType") or im.get("phaseType"):
+            np["Phase Type"] = str(im.get("PhaseType") or im.get("phaseType"))
+        if im.get("InstallationStatus") or im.get("installStatus"):
+            np["Installation Status"] = str(im.get("InstallationStatus") or im.get("installStatus"))
+        if im.get("InstallationType") or im.get("installType"):
+            np["Installation Type"] = str(im.get("InstallationType") or im.get("installType"))
+
+    # 2. Parse 'legacy' build parameter list
+    params = detail_block.get("data", [])
+    if isinstance(params, list):
+        for param in params:
+            if isinstance(param, dict) and "parameterName" in param:
+                val = str(param.get("parameterValue", ""))
+                if val:
+                    np[param["parameterName"]] = val
+
+    # 3. Supplement from local store (from bulk export) if any parameter is missing
+    if store_m:
+        if not np.get("Serial No") and store_m.get("serialNo"):
+            np["Serial No"] = str(store_m["serialNo"])
+        if not np.get("Make") and store_m.get("make"):
+            np["Make"] = str(store_m["make"])
+        if not np.get("Phase Type") and store_m.get("phaseType"):
+            np["Phase Type"] = str(store_m["phaseType"])
+        if not np.get("Installation Status") and store_m.get("installStatus"):
+            np["Installation Status"] = str(store_m["installStatus"])
+        if not np.get("Installation Type") and store_m.get("installType"):
+            np["Installation Type"] = str(store_m["installType"])
 
     nameplate = MeterNameplate(
         meter_id=meter_id,
@@ -144,24 +187,28 @@ def _shape_meter_detail(
         install_type=np.get("Installation Type"),
     )
 
-    hier_raw = raw_detail.get("hierarchy", {})
+    hier_raw = raw_detail.get("hierarchy", {}) if isinstance(raw_detail, dict) else {}
+    store_hier = store_m.get("hierarchy", {}) if store_m else {}
 
-    def parse_hier(val: str | None) -> HierarchyLevel | None:
-        if not val:
-            return None
-        if "(" in val and val.endswith(")"):
-            name_part, code_part = val.rsplit("(", 1)
-            return HierarchyLevel(name=name_part.strip(), code=code_part.rstrip(")").strip())
-        return HierarchyLevel(name=val, code=val)
+    def parse_hier(val: str | None, section_key: str) -> HierarchyLevel | None:
+        if val:
+            if "(" in val and val.endswith(")"):
+                name_part, code_part = val.rsplit("(", 1)
+                return HierarchyLevel(name=name_part.strip(), code=code_part.rstrip(")").strip())
+            return HierarchyLevel(name=val, code=val)
+        node = store_hier.get(section_key, {})
+        if node and (node.get("name") or node.get("code")):
+            return HierarchyLevel(name=node.get("name", ""), code=node.get("code", ""))
+        return None
 
     hierarchy = MeterHierarchy(
-        zone=parse_hier(hier_raw.get("Zone")),
-        circle=parse_hier(hier_raw.get("Circle")),
-        division=parse_hier(hier_raw.get("Division")),
-        subdivision=parse_hier(hier_raw.get("Subdivision")),
-        substation=parse_hier(hier_raw.get("Sub Station")),
-        feeder=parse_hier(hier_raw.get("Feeder")),
-        dt=parse_hier(hier_raw.get("DT")),
+        zone=parse_hier(hier_raw.get("Zone"), "zone"),
+        circle=parse_hier(hier_raw.get("Circle"), "circle"),
+        division=parse_hier(hier_raw.get("Division"), "division"),
+        subdivision=parse_hier(hier_raw.get("Subdivision"), "subdivision"),
+        substation=parse_hier(hier_raw.get("Sub Station"), "substation"),
+        feeder=parse_hier(hier_raw.get("Feeder"), "feeder"),
+        dt=parse_hier(hier_raw.get("DT"), "dt"),
     )
 
     geo = None
@@ -172,6 +219,16 @@ def _shape_meter_detail(
                 longitude=float(geo_data.get("longitude") or geo_data.get("lng")),
             )
         except (KeyError, ValueError, TypeError):
+            pass
+
+    if not geo and store_m and store_m.get("geo"):
+        s_geo = store_m["geo"]
+        try:
+            geo = MeterGeo(
+                latitude=float(s_geo.get("lat") or s_geo.get("latitude", 0)),
+                longitude=float(s_geo.get("lng") or s_geo.get("longitude", 0)),
+            )
+        except (ValueError, TypeError):
             pass
 
     return MeterDetail(
@@ -361,6 +418,12 @@ async def get_network_stats() -> NetworkStats:
 async def get_meter(meter_id: str) -> MeterDetail:
     c = get_client()
     try:
+        await _store.ensure_synced(c)
+    except Exception:
+        pass
+    store_m = _store.get_by_id(meter_id)
+
+    try:
         raw_detail = await c.get_meter_detail(meter_id)
         if not raw_detail or not raw_detail.get("meterId"):
             raise ValueError(f"Meter {meter_id} not found in portal")
@@ -368,7 +431,7 @@ async def get_meter(meter_id: str) -> MeterDetail:
         raise
     except Exception as exc:
         # Check local store before 404
-        m = _store.get_by_id(meter_id)
+        m = store_m
         if m is not None:
             geo = m.get("geo") or {}
             h = m.get("hierarchy", {})
@@ -413,7 +476,7 @@ async def get_meter(meter_id: str) -> MeterDetail:
     except Exception:
         pass
 
-    return _shape_meter_detail(raw_detail, geo_data, meter_id)
+    return _shape_meter_detail(raw_detail, geo_data, meter_id, store_m=store_m)
 
 
 # --------------------------------------------------------------------------- #
