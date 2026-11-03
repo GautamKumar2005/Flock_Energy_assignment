@@ -78,6 +78,10 @@ class LocalIndexStore:
             if not self.meters:
                 raise
 
+    def get_by_id(self, meter_id: str) -> dict | None:
+        """Return raw meter dict from local index or None if not found."""
+        return self._meters_by_id.get(meter_id)
+
     def get_sync_status(self) -> SyncStatus:
         last_str = None
         if self.last_synced_at:

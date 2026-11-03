@@ -103,14 +103,14 @@ class UrjaPortalClient:
 
             if signed:
                 secret = await self._get_signing_secret()
-                query = urlencode(params or {})
+                # Build query string in the same order httpx will use, so HMAC matches
+                query = urlencode(sorted((params or {}).items()))
                 ts, sig = _sign("GET", path, query, secret)
                 extra_headers = {"x-timestamp": ts, "x-signature": sig}
 
             resp = await self._client.get(  # type: ignore[union-attr]
                 path, params=params, headers=extra_headers
             )
-
             if resp.status_code == 200:
                 return resp.json()
 

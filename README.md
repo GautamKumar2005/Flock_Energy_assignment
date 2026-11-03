@@ -291,7 +291,7 @@ Our in-memory spatial index and Python dictionary store are optimized for speed,
 
 ## 🔗 Submission Deliverables & Documentation
 
-- 📄 [PROTOCOL.md](file:///C:/Users/gauta/flock_energy/flock/PROTOCOL.md) — Comprehensive technical write-up of portal discovery, authentication, SvelteKit decoding, and HMAC signing.
-- 📄 [REFLECTION.md](file:///C:/Users/gauta/flock_energy/flock/REFLECTION.md) — Engineering reflection answering the 5 take-home evaluation questions.
-- 📋 [openapi.json](file:///C:/Users/gauta/flock_energy/flock/openapi.json) — OpenAPI 3.1 specification.
-- 🧪 [tests/test_api.py](file:///C:/Users/gauta/flock_energy/flock/tests/test_api.py) — Automated test suite with 16 passing tests.
+- 📄 [PROTOCOL.md](PROTOCOL.md) — Comprehensive technical write-up of portal discovery, authentication, SvelteKit decoding, and HMAC signing.
+- 📄 [REFLECTION.md](REFLECTION.md) — Engineering reflection answering the 5 take-home evaluation questions.
+- 📋 [openapi.json](openapi.json) — OpenAPI 3.1 specification.
+- 🧪 [tests/test_api.py](tests/test_api.py) — Automated test suite with 16 passing tests.

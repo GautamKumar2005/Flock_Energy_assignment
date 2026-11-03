@@ -368,9 +368,19 @@ async def get_meter(meter_id: str) -> MeterDetail:
         raise
     except Exception as exc:
         # Check local store before 404
-        if meter_id in _store._meters_by_id:
-            m = _store._meters_by_id[meter_id]
+        m = _store.get_by_id(meter_id)
+        if m is not None:
             geo = m.get("geo") or {}
+            h = m.get("hierarchy", {})
+
+            def _hl(section: str) -> HierarchyLevel | None:
+                node = h.get(section, {})
+                name = node.get("name", "")
+                code = node.get("code", "")
+                if not name and not code:
+                    return None
+                return HierarchyLevel(name=name, code=code)
+
             return MeterDetail(
                 meter_id=meter_id,
                 nameplate=MeterNameplate(
@@ -382,15 +392,18 @@ async def get_meter(meter_id: str) -> MeterDetail:
                     install_type=m.get("installType"),
                 ),
                 hierarchy=MeterHierarchy(
-                    zone=HierarchyLevel(name=m.get("hierarchy", {}).get("zone", {}).get("name", ""), code=m.get("hierarchy", {}).get("zone", {}).get("code", "")),
-                    circle=HierarchyLevel(name=m.get("hierarchy", {}).get("circle", {}).get("name", ""), code=m.get("hierarchy", {}).get("circle", {}).get("code", "")),
-                    division=HierarchyLevel(name=m.get("hierarchy", {}).get("division", {}).get("name", ""), code=m.get("hierarchy", {}).get("division", {}).get("code", "")),
-                    subdivision=HierarchyLevel(name=m.get("hierarchy", {}).get("subdivision", {}).get("name", ""), code=m.get("hierarchy", {}).get("subdivision", {}).get("code", "")),
-                    substation=HierarchyLevel(name=m.get("hierarchy", {}).get("substation", {}).get("name", ""), code=m.get("hierarchy", {}).get("substation", {}).get("code", "")),
-                    feeder=HierarchyLevel(name=m.get("hierarchy", {}).get("feeder", {}).get("name", ""), code=m.get("hierarchy", {}).get("feeder", {}).get("code", "")),
-                    dt=HierarchyLevel(name=m.get("hierarchy", {}).get("dt", {}).get("name", ""), code=m.get("hierarchy", {}).get("dt", {}).get("code", "")),
+                    zone=_hl("zone"),
+                    circle=_hl("circle"),
+                    division=_hl("division"),
+                    subdivision=_hl("subdivision"),
+                    substation=_hl("substation"),
+                    feeder=_hl("feeder"),
+                    dt=_hl("dt"),
                 ),
-                geo=MeterGeo(latitude=float(geo.get("lat", 0)), longitude=float(geo.get("lng", 0))) if geo else None,
+                geo=MeterGeo(
+                    latitude=float(geo.get("lat") or geo.get("latitude", 0)),
+                    longitude=float(geo.get("lng") or geo.get("longitude", 0)),
+                ) if geo else None,
             )
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Meter {meter_id!r} not found: {exc}") from exc
 
